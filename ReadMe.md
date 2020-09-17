@@ -30,6 +30,10 @@ pip install db-sqlite3
 В командной строке выполнить:
 pip install requests
 !setup_6.png
+8. Установить PANDAS
+pip install pandas
+!setup_7.png
+
 
 
 
