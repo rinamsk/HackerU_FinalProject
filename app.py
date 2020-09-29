@@ -44,8 +44,8 @@ def getExtID(href):
 	res = re.findall(r'\d{3,}', href)
 	return int(res[0])
 
-i = 2
-i_max = 3
+i = 1
+#i_max = 5
 while True:
 	print("Page {}".format(i))
 	url = 'https://www.cian.ru/cat.php?deal_type=sale&engine_version=2&offer_type=flat&p={}&region=1'

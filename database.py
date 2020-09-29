@@ -18,7 +18,9 @@ class DB:
 		print('  '+'createFlat00Table'+' done') if log_mode else None
 		self.createFlatTable()
 		print('  '+'createFlatTable'+' done') if log_mode else None
-
+		self.CreateAppViews()
+		print('  '+'CreateAppViews'+' done') if log_mode else None
+		
 	def createFlat00Table(self):
 		self.cursor.execute('''
 				create table if not exists flat_00(
@@ -82,6 +84,130 @@ class DB:
 			'''
 			)
 
+	def setNumbers(self):
+		self.cursor.execute(
+			'''
+			UPDATE  flat 
+			SET     price = to_number(price),
+					price_per_meter = to_number(price_per_meter)
+
+			'''
+			)
+
+	def setEndDttm(self):
+		self.cursor.execute(
+			'''
+			UPDATE flat
+			SET    end_dttm = end_dttm--datetime('2999-12-31 23:59:59')
+			--WHERE  end_dttm = '2020-09-29 18:43:18'
+			WHERE end_dttm IS NULL;
+			'''
+			)
+		self.conn.commit()
+
+	def CreateAppViews(self, viewName=None, dropView=False):
+		if viewName is None or viewName == 'v_flat_price_stat':
+			if dropView:
+				self.cursor.execute(
+				'''
+				DROP VIEW if exists v_flat_lower;
+				'''
+				)
+
+			self.cursor.execute(
+				'''-- Изменение цены квартиры
+				create view if not exists v_flat_price_stat AS
+				SELECT 	flat_curr.id 							as curr_id,
+						flat_prev.id 							as prev_id, 
+						flat_curr.ext_key						as ext_key,
+						flat_curr.city							as city,
+						flat_curr.metro_station					as metro_station,
+						CAST(flat_prev.price as int) 			as prev_price,
+						flat_curr.price 						as curr_price,
+						cast(flat_prev.price_per_meter as int) 	as prev_price_per_meter,
+						cast(flat_curr.price_per_meter as int) 	as curr_price_per_meter,
+						cast(flat_curr.price as int) - cast(flat_prev.price as int)
+																as price_res
+				FROM	flat flat_curr
+				LEFT JOIN flat flat_prev ON  flat_curr.ext_key = flat_prev.ext_key
+										 AND flat_prev.end_dttm = flat_curr.start_dttm
+				WHERE	current_timestamp BETWEEN flat_curr.start_dttm AND flat_curr.end_dttm;
+				'''
+				)
+
+		if viewName is None or viewName == 'v_flat_lower':
+			if dropView:
+				self.cursor.execute(
+				'''
+				DROP VIEW if exists v_flat_lower;
+				'''
+				)
+
+			self.cursor.execute(
+				'''--Квартиры, которые подешевели
+				create view if not exists v_flat_lower AS
+				SELECT 	*
+				FROM	v_flat_price_stat
+				WHERE	price_res < 0; -- Здесь отсекаем новые квартиры, так как нет NVL(0)
+				'''
+				)
+
+		if viewName is None or viewName == 'v_area_higher':
+			if dropView:
+				self.cursor.execute(
+				'''
+				DROP VIEW v_area_higher;
+				'''
+				)
+
+			self.cursor.execute(
+				'''-- Районы, которые дорожают
+				create  view if not exists v_area_higher AS
+				SELECT 	metro_station, sum(price_res) as price_res
+				FROM	v_flat_price_stat
+				--WHERE   prev_id IS NOT NULL
+				GROUP BY metro_station
+				HAVING  sum(price_res) > 0
+				;
+				'''
+				)
+
+		if  viewName is None or viewName == 'v_new_flats':
+			if dropView:
+				self.cursor.execute(
+				'''
+				DROP VIEW v_new_flats;
+				'''
+				)
+
+			self.cursor.execute(
+				'''-- Новые квартиры
+				create view if not exists v_new_flats AS
+				SELECT 	*
+				FROM	v_flat_price_stat
+				WHERE   prev_id IS NULL;
+				'''
+				)
+
+	def printRepHeader(self, print_str_=''):
+		header_len = len(print_str_) + 8
+		print('='*header_len)
+		print('='*3 + ' '+ print_str_ + ' ' + '='*3) #if len(print_str_) > 0 else None
+		print('='*header_len)
+
+	def getRep(self, repNum=None):
+		repList = ['v_flat_price_stat', 'v_flat_lower', 'v_area_higher', 'v_new_flats']
+		headerList = ['Изменение цены', 'Квартиры, которые подешевели', 'Районы, которые дорожают', 'Новые квартиры']
+		if (repNum is None) or not (0 <= repNum < len(repList)):
+			print('Ошибка номера отчета:', repNum)
+			print('Доступный список отчетов:')
+			for i in range(len(repList)):
+				print(i, repList[i])
+
+		self.printRepHeader(headerList[repNum])	
+		for row in self.readTable(repList[repNum]):
+			print(row)
+
 	def createTableNewRows(self):
 		self.cursor.execute('''
 			CREATE TABLE flat_2_insert AS
@@ -124,7 +250,7 @@ class DB:
 						AND t0.href = t.href
 				   );
 			''')
-		
+
 	def checkTableUpdateRows(self):
 		sql = '''
 			SELECT t0.*
@@ -313,7 +439,7 @@ class DB:
 			dbStat[table] = self.tableStat(table)
 		print(dbStat)
 
-	def readTable(self, tableName, colName, ColValue):
+	def readTable(self, tableName, colName=None, ColValue=None):
 		sql = f'SELECT * FROM {tableName}'
 		if not(colName is None or ColValue is None):
 			sql += f" WHERE {colName} = '{ColValue}'"
