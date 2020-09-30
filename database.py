@@ -471,33 +471,22 @@ if __name__ == '__main__':
 	print('  Connection done')
 
 	db.deleteTMPTables()
-	print('  deleteTMPTables done')
-	db.createAutoTable()
-	print('  '+'createAutoTable'+' done')
+	print('  deleteTMPTables' + 'done')
+	db.createFlat00Table()
+	print('  '+'createFlat00Table'+' done')
+	db.createFlatTable()
+	print('  '+'createFlatTable'+' done')
+	db.CreateAppViews()
+	print('  '+'CreateAppViews'+' done')
+
 	db.createTableNewRows()
 	print('  '+'createTableNewRows'+' done')
 	db.createTableUpdateRows()
 	print('  '+'createTableUpdateRows'+' done')
-	db.addTableDeleteRows()
+	db.createTableDeleteRows()
 	print('  '+'addTableDeleteRows'+' done')
-	db.updateAutoTable()
+	db.updateFlatTable()
 	print('  '+'updateAutoTable'+' done')
 
 
-
-	print('_'*10 + 'auto_2_insert:' + '_'*10)
-	for row in readTable('auto_2_insert'):
-		print(row)
-
-	print('_'*10 + 'auto_2_update:' + '_'*10)
-	for row in readTable('auto_2_update'):
-		print(row)
-
-	print('_'*10 + 'auto_2_delete:' + '_'*10)
-	for row in readTable('auto_2_delete'):
-		print(row)
-
-	print('_'*10 + 'auto:' + '_'*10)
-	for row in readTable('auto'):
-		print(row)
 	
