@@ -25,7 +25,7 @@ HackerU Final Project
        ```
            > env\Scripts\activate    
        ```
-:exclamation: Все дальнейшие действия выполняются через командую строку только в виртуальном окружении.    
+    :exclamation: Все дальнейшие действия выполняются через командую строку только в виртуальном окружении.    
 1. Обновить pip install:    
 ```
     python -m pip install --upgrade pip    
