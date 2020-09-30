@@ -19,7 +19,7 @@ HackerU Final Project
     1. Перейти в рабочую папку (созданная на шаге 1)    
     1. Создать виртуальное окружение    
     '''
-    python -m venv env    
+        python -m venv env    
     '''
     1. Активировать виртуальное окружение    
 > env\Scripts\activate    
