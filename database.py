@@ -8,7 +8,7 @@ import pandas as pd
 class DB:
 
 	def __init__(self):
-		self.conn = sqlite3.connect('flats.db')
+		self.conn = sqlite3.connect('flats.db', check_same_thread=False)
 		self.cursor = self.conn.cursor()
 
 	def new_session(self, log_mode = False):
@@ -93,14 +93,15 @@ class DB:
 
 			'''
 			)
+		self.conn.commit()
 
 	def setEndDttm(self):
 		self.cursor.execute(
 			'''
 			UPDATE flat
-			SET    end_dttm = end_dttm--datetime('2999-12-31 23:59:59')
-			--WHERE  end_dttm = '2020-09-29 18:43:18'
-			WHERE end_dttm IS NULL;
+			SET    end_dttm = datetime('2999-12-31 23:59:59')
+			WHERE  end_dttm = '2020-09-30 19:02:50';
+			--WHERE end_dttm IS NULL;
 			'''
 			)
 		self.conn.commit()
@@ -110,7 +111,7 @@ class DB:
 			if dropView:
 				self.cursor.execute(
 				'''
-				DROP VIEW if exists v_flat_lower;
+				DROP VIEW if exists v_flat_price_stat;
 				'''
 				)
 
@@ -127,7 +128,9 @@ class DB:
 						cast(flat_prev.price_per_meter as int) 	as prev_price_per_meter,
 						cast(flat_curr.price_per_meter as int) 	as curr_price_per_meter,
 						cast(flat_curr.price as int) - cast(flat_prev.price as int)
-																as price_res
+																as price_res,
+						flat_curr.start_dttm					as curr_start_dttm,
+						flat_curr.end_dttm						as curr_end_dttm
 				FROM	flat flat_curr
 				LEFT JOIN flat flat_prev ON  flat_curr.ext_key = flat_prev.ext_key
 										 AND flat_prev.end_dttm = flat_curr.start_dttm
@@ -185,7 +188,9 @@ class DB:
 				create view if not exists v_new_flats AS
 				SELECT 	*
 				FROM	v_flat_price_stat
-				WHERE   prev_id IS NULL;
+				WHERE   prev_id IS NULL
+				AND     curr_start_dttm = (SELECT max(t.curr_start_dttm) FROM v_flat_price_stat t)
+				;
 				'''
 				)
 
@@ -199,16 +204,19 @@ class DB:
 		repList = ['v_flat_price_stat', 'v_flat_lower', 'v_area_higher', 'v_new_flats']
 		headerList = ['Изменение цены', 'Квартиры, которые подешевели', 'Районы, которые дорожают', 'Новые квартиры']
 		if (repNum is None) or not (0 <= repNum < len(repList)):
-			print('Ошибка номера отчета:', repNum)
+			print('Ошибка номера отчета:', repNum) if not repNum is None else None
 			print('Доступный список отчетов:')
 			for i in range(len(repList)):
 				print(i, repList[i])
+			return repList
+		else:	
+			self.printRepHeader(headerList[repNum])	
+			repData = self.readTable(repList[repNum])
+			for row in repData:
+				print(row)
+			return repData
 
-		self.printRepHeader(headerList[repNum])	
-		for row in self.readTable(repList[repNum]):
-			print(row)
-
-	def createTableNewRows(self):
+	def createTableNewRows(self, log_mode=False):
 		self.cursor.execute('''
 			CREATE TABLE flat_2_insert AS
 			SELECT t0.*
@@ -216,6 +224,7 @@ class DB:
 			LEFT JOIN v_flat_curr t ON t0.ext_key = t.ext_key
 			WHERE  t.ext_key IS NULL;
 			''')
+		print('createTableNewRows done') if log_mode else None
 
 	def checkTableNewRows(self):
 		sql = '''
@@ -223,14 +232,14 @@ class DB:
 			FROM   flat_00 t0
 			LEFT JOIN v_flat_curr t ON t0.ext_key = t.ext_key
 			WHERE  t.ext_key IS NULL
-			and    t0.ext_key = 219255833
+			and    t0.ext_key = 217937882
 			;
 			'''
 		self.cursor.execute(sql)
 		return self.cursor.fetchall()
 
 
-	def createTableUpdateRows(self):
+	def createTableUpdateRows(self, log_mode=False):
 		self.cursor.execute(
 			'''
 			CREATE TABLE flat_2_update AS
@@ -250,6 +259,7 @@ class DB:
 						AND t0.href = t.href
 				   );
 			''')
+		print('createTableUpdateRows done') if log_mode else None
 
 	def checkTableUpdateRows(self):
 		sql = '''
@@ -268,24 +278,25 @@ class DB:
 						AND t0.sold = t.sold
 						AND t0.href = t.href
 					)
-			and    t0.ext_key = 219255833;
+			--and    t0.ext_key = 217937882
+			;
 			'''
 		self.cursor.execute(sql)
 		return self.cursor.fetchall()
 
-	def createTableDeleteRows(self):
+	def createTableDeleteRows(self, log_mode=False):
 		self.cursor.execute(
 			'''
 			CREATE TABLE flat_2_delete AS
 			SELECT t.*
 			FROM   v_flat_curr t
 			LEFT JOIN flat_00 t0 ON t0.ext_key = t.ext_key
-			WHERE  t0.ext_key IS NULL;
+			WHERE  t0.ext_key IS NULL
+			AND    ifnull((SELECT count(1) as cnt FROM flat_00), 0) <> 0
+			;
 			''')
 
-	def csv2sql(self, filePath):
-		df = pd.read_csv(filePath)
-		df.to_sql('auto_00', con=self.conn, if_exists='replace')
+		print('createTableUpdateRows done') if log_mode else None
 
 	def load_data(self, flat_attr = {}):
 		str_sql = ("""
@@ -307,7 +318,6 @@ class DB:
 			     + "'" + flat_attr['href']           + "'"  \
 			+ """)
 			""")
-		#print(str_sql)
 		self.cursor.execute(str_sql)
 		self.conn.commit()
 
@@ -376,11 +386,11 @@ class DB:
 
 	def processData(self, log_mode):
 		print('Starting to process data:') if log_mode else None
-		self.createTableNewRows()
+		self.createTableNewRows(log_mode=True)
 		print('  '+'createTableNewRows...'+' done') if log_mode else None
-		self.createTableUpdateRows()
+		self.createTableUpdateRows(log_mode=True)
 		print('  '+'createTableUpdateRows...'+' done') if log_mode else None
-		self.createTableDeleteRows()
+		self.createTableDeleteRows(log_mode=True)
 		print('  '+'createTableDeleteRows...'+' done') if log_mode else None
 		self.updateFlatTable(log_mode=True)
 		print('  '+'updateFlatTable'+' done') if log_mode else None
@@ -410,6 +420,7 @@ class DB:
 			drop table if exists flat_2_delete;
 			'''
 		)
+
 	def deleteMainTables(self, log_mode=False):
 		self.cursor.execute(
 			'''
@@ -421,7 +432,8 @@ class DB:
 	def updateFlatAttr(self, colName, ColValue, colChangeName, colChangeValue):
 		sql = f'UPDATE flat '
 		sql += f'SET {colChangeName} = {colChangeValue} '
-		sql += f'WHERE {colName} = {ColValue};'
+		sql += f'WHERE {colName} = {ColValue}'
+		sql += f';'
 		print(sql)
 		self.cursor.execute(sql)
 		self.conn.commit()
@@ -460,8 +472,6 @@ if __name__ == '__main__':
 
 	db.deleteTMPTables()
 	print('  deleteTMPTables done')
-	db.csv2sql(fileURL) # Загрузка данных выгрузки в SQL
-	print('  '+'csv2sql'+' done')
 	db.createAutoTable()
 	print('  '+'createAutoTable'+' done')
 	db.createTableNewRows()
