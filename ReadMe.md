@@ -1,7 +1,7 @@
 HackerU Final Project
 2020-09-16
 
-Установка:
+h1. Установка
 1. Создать папку на диске
 2. Сохранить в нее файлы
 3. Создать виртуальное окружение:
@@ -33,6 +33,11 @@ pip install requests
 8. Установить PANDAS
 pip install pandas
 !setup_7.png
+9. Установить FLASK
+pip install flask
+!setup_8.png
+
+
 
 
 
